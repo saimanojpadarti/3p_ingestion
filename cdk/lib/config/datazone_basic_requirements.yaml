@@ -1,0 +1,199 @@
+resources:
+  s3_buckets:
+    pnp-datazone-blueprint-bucket:
+    pnp-datazone-metadata-bucket:
+    pnp-datazone-sql-assets:
+      eventBridgeEnabled: true
+    pnp-gluejob-output-bucket:
+    pnp-ips-mapper-configs:
+
+  iam_roles:
+    AmazonDatazoneGlueProvisioningRole:
+      assume_roles:
+        - datazone.amazonaws.com
+        - glue.amazonaws.com
+        - lakeformation.amazonaws.com
+      managed_policies: 
+        - 'service-role/AmazonDataZoneDomainExecutionRolePolicy'
+        - AmazonDataZoneRedshiftGlueProvisioningPolicy
+        - 'service-role/AWSGlueServiceRole'
+        - AWSLakeFormationDataAdmin
+      attachemt_policies:
+        actions:
+          - 'iam:PassRole'
+          - 'iam:GetRole'
+          - 'iam:CreateServiceLinkedRole'
+          - 'glue:*'
+          - 's3:*'
+          - 'lakeformation:*'
+          - 'athena:*'
+          - lakeformation:PutDataLakeSettings
+          - lakeformation:GetDataLakeSettings
+        resources:
+          - '*'
+    
+    AmazonDatazoneGlueManageAccessRole:
+      assume_roles:
+        - datazone.amazonaws.com
+        - glue.amazonaws.com
+        - lakeformation.amazonaws.com
+        - s3.amazonaws.com
+      managed_policies: 
+        - 'service-role/AWSGlueServiceRole'
+        - AWSLakeFormationDataAdmin
+      attachemt_policies:
+        actions:
+          - 'iam:PassRole'
+          - 'iam:GetRole'
+          - 'glue:*'
+          - 's3:*'
+          - 'lakeformation:*'
+          - 'athena:*'
+          - lakeformation:PutDataLakeSettings
+          - lakeformation:GetDataLakeSettings
+        resources:
+          - '*'
+
+    AmazonDataZoneDomainExecutionRole:
+      assume_roles:
+        - datazone.amazonaws.com
+      managed_policies: 
+        - 'service-role/AmazonDataZoneDomainExecutionRolePolicy'
+      path: '/service-role/'
+      trust_actions:
+        - 'sts:AssumeRole'
+        - 'sts:TagSession'
+      trust_conditions:
+        tagKeys: 'datazone*'
+
+  datalake_settings:
+    admins:
+      - AmazonDatazoneGlueProvisioningRole
+      - AmazonDatazoneGlueManageAccessRole
+
+  glue_connections:
+    connectionType: NETWORK
+    physicalConnectionRequirements:
+      availabilityZone: us-west-2
+      securityGroupIdList:
+        - sg-0c4aa5abc5dce4d31
+      subnetId: subnet-08659cb2e4f9a5457
+    name: IPS Network Connection
+
+  glue_jobs:
+    glue_job_to_send_datazone_project_data_to_ips:
+      scriptName: sending_datazone_asset_data_to_ips.py
+      glue_job_type: 'glueetl'
+      pythonVersion: '3'
+      glue_job_role: AmazonDatazoneGlueProvisioningRole
+      numberOfWorkers: 2
+      timeout: 120
+      workerType: 'G.1X'
+      glue_version: '5.0'
+      max_concurrent_runs: 10
+      jobRunQueuingEnabled: true
+      glue_job_arguments: 
+        '--job-bookmark-option': 'job-bookmark-enable'
+        '--additional-python-modules': 'awswrangler==3.9.0'
+        '--source_bucket_name': 'pnp-datazone-sql-assets'
+      connections: 
+        - IPS Network Connection
+
+  glue_workflows:
+    workflow_to_glue_job_to_create_sql_asset_and_send_to_ips:
+      description: 'workflow to trigger the glue job, to create sql asset in db and send the data to IPS'
+
+  glue_triggers:
+    trigger_to_glue_job_to_create_sql_asset_and_send_to_ips:
+      actions:
+        - jobName: glue_job_to_send_datazone_project_data_to_ips
+      type: ON_DEMAND
+      description: 'trigger to publish the data asset to IDPS project'
+      startOnCreation: false
+      workflow_name: workflow_to_glue_job_to_create_sql_asset_and_send_to_ips
+  
+  datazone_domains:
+    People Management:
+      domainExecutionRole: AmazonDataZoneDomainExecutionRole
+      # below are optional parameters
+      description: 'A root domain for managing the entire domain hierarchy'
+      # domainVersion: string
+      # kmsKeyIdentifier: string
+      # serviceRole: string
+      # SingleSignOn:  IResolvable | SingleSignOnProperty
+      # tags: CfnTag[]
+
+  datazone_users:
+    PowerUser:
+      userIdentifier: 'PowerUser'
+      status: 'ACTIVATED'
+      userType: 'IAM_ROLE'
+    Developer:
+      userIdentifier: 'Developer'
+      status: 'ACTIVATED'
+      userType: 'IAM_ROLE'
+
+  #datazone blueprints need to be configured individually (create multiple blueprints for each domain available create a new blueprint config aswell)
+  datazone_blueprints:
+    enabledRegions:
+      # - us-west-2
+    environmentBlueprintIdentifier: 'DefaultDataLake'
+    manageAccessRoleArn: AmazonDatazoneGlueManageAccessRole
+    provisioningRoleArn: AmazonDatazoneGlueProvisioningRole
+    regionalParameters:
+      - parameters:
+          S3Location: '' #no need to pass the s3 location it is handled in code directly, but don't remove the attribute
+
+  event_bridge_rules:
+    rule_datazone_asset_metadata_update_listner:
+      eventBus: default
+      eventPattern:
+        source: 
+          - 'aws.datazone'
+        detailType:
+          - 'Asset Added To Catalog'
+          - 'Metadata Generation Accepted'
+      description: event bridge rule to trigger the lambda function, to download the metadata generated on datazone asset.
+      enabled: true
+      targets:
+        - action: 'invokeLambdaFunction'
+          service: 'Lambda'
+          parameters:
+            Name: datazone_asset_metadata_download_listner
+
+    rule_glue_job_to_create_sql_asset_and_send_to_ips:
+        eventBus: default
+        eventPattern:
+          source: 
+            - 'aws.s3'
+          detailType:
+            - 'Object Created'
+          detail:
+            bucket: 
+              name: 
+                - pnp-datazone-sql-assets-{{account_id}}-{{region}}
+        description: event bridge rule to trigger the glue job pnp_datazone_sql_assets_creation
+        enabled: true
+        targets:
+          - action: 'startWorkflowRun'
+            service: 'Glue'
+            parameters:
+              Name: workflow_to_glue_job_to_create_sql_asset_and_send_to_ips
+  
+  lambda_functions:
+    datazone_asset_metadata_download_listner:
+      handler: datazone_asset_metadata_download.handler
+      runtime: lambda.Runtime.PYTHON_3_13
+      code_dir: dz_asset_listner
+      vpc: vpc-05cbaa01b803e89b1
+      vpc_subnets: 
+        - subnet-011eaa2c03b8d3a4d
+        - subnet-0f24c1d1c6836bdf1
+        - subnet-0cd666cbff70eaf81
+      security_groups:
+        - sg-0753b5c419281ba18
+
+  sns_topics:
+    slack_subscription_using_email:
+      contentBasedDeduplication: false
+      displayName: slack message using email subscription

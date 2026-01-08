@@ -1,0 +1,23 @@
+domainName: "People Management"
+domainUnits:
+  - name: "Time and Absence Management"
+    domainUnits:
+      - name: "Time Tracking"
+      - name: "Absence Management"
+        projects:
+          - name: "Time away data ingestion"
+            description: "Time away data ingestion"
+            project_membership:
+              member1:
+                designation: 'PROJECT_OWNER'
+                predefinedUserKey: 'PowerUser'
+              member2:
+                designation: 'PROJECT_CONTRIBUTOR'
+                predefinedUserKey: 'Developer'
+            entities:
+              - entity_type: 'employeeTimeOff'
+                source_bucket: 'source-pnp-time-away-ingestion'
+                schedule_trigger_timing: 'cron(30 3 * * ? *)'
+              - entity_type: 'employeeHolidayCalendar'
+                source_bucket: 'pnp-employee-holiday-calendar'
+                schedule_trigger_timing: 'cron(40 3 * * ? *)'

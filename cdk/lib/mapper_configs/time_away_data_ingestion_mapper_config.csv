@@ -1,0 +1,16 @@
+from,to
+employeeId,employeeId
+corpId,corpId
+timeOffEntryId,timeOffEntryId
+timeOffEntryRefId,timeOffEntryRefId
+timeOffEventWID,timeOffEventWID
+timeOffUnit,timeOffUnit
+timeOffDate,timeOffDate
+timeOffReason,timeOffReason
+timeOffReasonId,timeOffReasonId
+unitOfTime,unitOfTime
+timeOffType,timeOffType
+timeOffTypeId,timeOffTypeId
+requestType,requestType
+enteredDate,dateInitiated
+approvedDateTime,approvedDateTime

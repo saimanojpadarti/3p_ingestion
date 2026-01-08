@@ -1,0 +1,2 @@
+database_name,table_name,sql_query
+env_absencemanagement_timeawaydataingestion_pub_db,table_target_time_away_data_ingestion_828604885489_us_west_2,"select * from table_target_time_away_data_ingestion_828604885489_us_west_2"
