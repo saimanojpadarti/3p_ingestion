@@ -1,5 +1,4 @@
 import * as cdk from "aws-cdk-lib";
-import { IntuVpc } from "@intuit-cdk/core";
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as glue from 'aws-cdk-lib/aws-glue';
